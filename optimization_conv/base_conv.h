@@ -12,8 +12,6 @@ void convolution(const float *src, int batch, int srcC, int srcH, int srcW,
                  int strideY, int strideX, int padY, int padX, int padH, int padW, int group,
                  const float *weight, const float *bias, float *dst, int dstC, int dstH, int dstW)
 {
-    // int dstH = (srcH + padY + padH - (dilationY * (kernelY - 1) + 1)) / strideY + 1;
-    // int dstW = (srcW + padX + padW - (dilationX * (kernelX - 1) + 1)) / strideX + 1;
     dstC = dstC / group;
     srcC = srcC / group;
     for (int b = 0; b < batch; ++b)

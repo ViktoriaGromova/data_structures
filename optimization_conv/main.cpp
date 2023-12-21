@@ -6,23 +6,25 @@
 #include "base_conv.h"
 #include "opt1_conv.h"
 
-
 using Timer = std::chrono::time_point<std::chrono::high_resolution_clock>;
 
-Timer now() {
+Timer now()
+{
     return std::chrono::high_resolution_clock::now();
 }
 
-double getDuration(Timer start, Timer end) {
+double getDuration(Timer start, Timer end)
+{
     return static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()) * 1e-6;
 }
 
-int main(){
+int main()
+{
     setlocale(LC_ALL, "");
-    const int batch = 4; // Количество изображений в пакете
-    const int srcC = 3; // Количество входных каналов
-    const int srcH = 50; // Высота входа
-    const int srcW = 50; // Ширина входа
+    const int batch = 4;  // Количество изображений в пакете
+    const int srcC = 3;   // Количество входных каналов
+    const int srcH = 100; // Высота входа
+    const int srcW = 100; // Ширина входа
 
     const int kernelY = 7; // Высота фильтра
     const int kernelX = 7; // Ширина фильтра
@@ -38,7 +40,7 @@ int main(){
     const int padH = 0; // Паддинг до
     const int padW = 0; // Паддинг после
 
-    const int group = 1; // Количество групп свертки
+    const int group = 1;  // Количество групп свертки
     const int dstC = 100; // Количество выходных каналов
 
     const int dstH = (srcH + padY + padH - (dilationY * (kernelY - 1) + 1)) / strideY + 1;
@@ -49,56 +51,41 @@ int main(){
     const int biasSize = group * dstC;
     const int dstSize = batch * group * dstC * dstH * dstW;
 
-    float * src = new float [srcSize];
-    float * weight = new float [weightSize];
-    float * bias = new float [biasSize];
-    float * dst = new float [dstSize];
+    auto *src = new float[srcSize];
+    auto *weight = new float[weightSize];
+    auto *bias = new float[biasSize];
+    auto *dst = new float[dstSize];
 
-    //Заполняем матрицу числами
+    std::fill(src, src + srcSize, 1.0f);
+    std::fill(weight, weight + weightSize, 1.0f);
+    std::fill(bias, bias + biasSize, 1.0f);
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> dist(-1.0, 1.0);
-
-    for (int i = 0; i < srcSize; ++i)
+    double conv[100];
+    std::cout << "Ref :" << std::endl;
+    float *buf = (float *)malloc(dstH * dstW * srcC * kernelY * kernelX * sizeof(float));
+    for (int i = 0; i < 100; ++i)
     {
-        // src[i] = dist(gen);
-        src[i] = 1;
+        Timer start = now();
+        convolution(src, batch, srcC, srcH, srcW, kernelY, kernelX, dilationY, dilationX,
+                    strideY, strideX, padY, padX, padH, padW, group, weight, bias, dst, dstC, dstH, dstW);
+        Timer end = now();
+        *(conv + i) = getDuration(start, end);
     }
-    for (int i = 0; i < weightSize; ++i)
-    {
-        // weight[i] = dist(gen); // Заполнение случайными значениями
-        weight[i] = 1;
-    }
+    std::sort(conv, conv + 100);
+    std::cout << (conv[50] + conv[49]) / 2 << " ms" << std::endl;
 
-    for (int i = 0; i < biasSize; ++i)
+    double conv_opt1[100];
+    std::cout << "Opt :" << std::endl;
+    for (int i = 0; i < 100; ++i)
     {
-        bias[i] = 1; // Заполнение случайными значениями
+        Timer start = now();
+        float *buf = (float *)malloc(dstH * dstW * srcC * kernelY * kernelX * sizeof(float));
+        convolution_opt1(src, batch, srcC, srcH, srcW, kernelY, kernelX, dilationY, dilationX,
+                         strideY, strideX, padY, padX, padH, padW, group, weight, bias, dst, dstC, buf, dstH, dstW);
+        Timer end = now();
+        *(conv_opt1 + i) = getDuration(start, end);
     }
-    double conv[100]; 
-    std::cout << "Стандартная реализация(неоптимизированная):" << std::endl;
-    for(int i = 0; i < 100; ++i){
-    Timer start = now();
-    float* buf = (float*)malloc(dstH * dstW * srcC * kernelY * kernelX * sizeof(float));
-    convolution(src, batch, srcC, srcH, srcW, kernelY, kernelX, dilationY, dilationX,
-        strideY, strideX, padY, padX, padH, padW, group, weight, bias, dst, dstC, dstH, dstW);
-    Timer end = now();
-    *(conv + i) = getDuration(start, end);
-    }
-    std::sort(conv, conv+100);
-    std::cout << conv[50] << " ms"  <<std::endl;
-
-    double conv_opt1[100]; 
-    std::cout << "реализация 1 (оптимизированная):" << std::endl;
-    for(int i = 0; i < 100; ++i){
-    Timer start = now();
-    float* buf = (float*)malloc(dstH * dstW * srcC * kernelY * kernelX * sizeof(float));
-    convolution_opt1(src, batch, srcC, srcH, srcW, kernelY, kernelX, dilationY, dilationX,
-        strideY, strideX, padY, padX, padH, padW, group, weight, bias, dst, dstC, buf, dstH, dstW);
-    Timer end = now();
-    *(conv_opt1 + i) = getDuration(start, end);
-    }
-    std::sort(conv_opt1, conv_opt1+100);
-    std::cout << conv_opt1[50] << " ms"  <<std::endl;
+    std::sort(conv_opt1, conv_opt1 + 100);
+    std::cout << (conv_opt1[50] + conv_opt1[49]) / 2 << " ms" << std::endl;
     return 0;
 }
